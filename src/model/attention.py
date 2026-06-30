@@ -100,17 +100,22 @@ class GQAAttention(nn.Module):
         k = self._repeat_kv(k)
         v = self._repeat_kv(v)
 
-        # Scaled dot-product attention
-        attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
-
-        # Apply causal mask
-        if mask is not None:
-            attn = attn.masked_fill(mask[:T, :T] == 0, float("-inf"))
-
-        attn = F.softmax(attn, dim=-1)
-
-        # Weighted sum of values
-        out = torch.matmul(attn, v)
+        # Use PyTorch SDPA (automatically uses FlashAttention on GPU)
+        if hasattr(F, 'scaled_dot_product_attention'):
+            # SDPA handles scaling internally; pass causal mask as attn_mask
+            out = F.scaled_dot_product_attention(
+                q, k, v,
+                attn_mask=mask[:T, :T] if mask is not None else None,
+                dropout_p=0.0,  # Dropout handled by TransformerBlock
+                is_causal=False,  # We provide explicit mask
+            )
+        else:
+            # Fallback to manual attention
+            attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
+            if mask is not None:
+                attn = attn.masked_fill(mask[:T, :T] == 0, float("-inf"))
+            attn = F.softmax(attn, dim=-1)
+            out = torch.matmul(attn, v)
 
         # Reshape and project
         out = out.transpose(1, 2).contiguous().view(B, T, -1)
