@@ -93,6 +93,17 @@ class InstructionDataset(Dataset):
         return x, y
 
 
+def _log_sft(epoch, config, global_step, total_loss, start_time):
+    """Log SFT training progress."""
+    avg_loss = total_loss / 10
+    elapsed = time.time() - start_time
+    print(
+        f"Epoch {epoch+1}/{config.sft_epochs} | "
+        f"Step {global_step} | Loss: {avg_loss:.4f} | Time: {elapsed:.0f}s"
+    )
+    return 0.0, time.time()
+
+
 def train_sft(
     config: MewtwoConfig,
     model_path: str,
@@ -149,13 +160,8 @@ def train_sft(
     global_step = 0
     for epoch in range(config.sft_epochs):
         for batch_idx, (x, y) in enumerate(dataloader):
-            x = x.to(config.device)
-            y = y.to(config.device)
-
-            # Forward pass
+            x, y = x.to(config.device), y.to(config.device)
             logits, loss, _ = model(x, targets=y)
-
-            # Backward pass
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
@@ -165,16 +171,9 @@ def train_sft(
             global_step += 1
 
             if global_step % 10 == 0:
-                avg_loss = total_loss / 10
-                elapsed = time.time() - start_time
-                print(
-                    f"Epoch {epoch+1}/{config.sft_epochs} | "
-                    f"Step {global_step} | "
-                    f"Loss: {avg_loss:.4f} | "
-                    f"Time: {elapsed:.0f}s"
+                total_loss, start_time = _log_sft(
+                    epoch, config, global_step, total_loss, start_time
                 )
-                total_loss = 0.0
-                start_time = time.time()
 
     # Save SFT model
     sft_path = os.path.join(output_dir, "mewtwo_sft.pt")
