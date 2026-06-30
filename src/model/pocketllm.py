@@ -144,6 +144,26 @@ class MewtwoLLM(nn.Module):
 
         return logits, loss, new_kv_caches
 
+    def _sample(self, logits: torch.Tensor, temperature: float, top_k: int, top_p: float) -> torch.Tensor:
+        """Sample next token from logits with temperature, top-k, and top-p filtering."""
+        logits = logits / temperature
+
+        if top_k > 0:
+            top_k_values, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+            logits[logits < top_k_values[:, -1:]] = float("-inf")
+
+        if top_p < 1.0:
+            sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+            cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+            sorted_indices_to_remove = cumulative_probs > top_p
+            sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+            sorted_indices_to_remove[..., 0] = 0
+            indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
+            logits[indices_to_remove] = float("-inf")
+
+        probs = F.softmax(logits, dim=-1)
+        return torch.multinomial(probs, num_samples=1)
+
     @torch.no_grad()
     def generate(
         self,
@@ -169,35 +189,9 @@ class MewtwoLLM(nn.Module):
         kv_caches = None
 
         for _ in range(max_new_tokens):
-            # If we exceed context length, trim the input
             idx_cond = idx if idx.size(1) <= self.config.context_length else idx[:, -self.config.context_length:]
-
-            # Forward pass
             logits, _, kv_caches = self.forward(idx_cond, kv_caches=kv_caches)
-
-            # Get logits for the last position
-            logits = logits[:, -1, :] / temperature
-
-            # Top-k filtering
-            if top_k > 0:
-                top_k_values, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < top_k_values[:, -1:]] = float("-inf")
-
-            # Top-p (nucleus) filtering
-            if top_p < 1.0:
-                sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-                cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-                sorted_indices_to_remove = cumulative_probs > top_p
-                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
-                sorted_indices_to_remove[..., 0] = 0
-                indices_to_remove = sorted_indices_to_remove.scatter(1, sorted_indices, sorted_indices_to_remove)
-                logits[indices_to_remove] = float("-inf")
-
-            # Sample
-            probs = F.softmax(logits, dim=-1)
-            idx_next = torch.multinomial(probs, num_samples=1)
-
-            # Append to sequence
+            idx_next = self._sample(logits[:, -1, :], temperature, top_k, top_p)
             idx = torch.cat([idx, idx_next], dim=1)
 
         return idx
