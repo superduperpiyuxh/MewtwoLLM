@@ -122,6 +122,25 @@ def compute_log_probs(model, tokens, device):
     return (token_log_probs * mask).sum(dim=1)
 
 
+def _log_dpo(epoch, config, global_step, total_loss, start_time,
+             policy_chosen_logps, policy_rejected_logps,
+             reference_chosen_logps, reference_rejected_logps):
+    """Log DPO training progress with accuracy."""
+    avg_loss = total_loss / 10
+    with torch.no_grad():
+        chosen_rewards = config.dpo_beta * (policy_chosen_logps - reference_chosen_logps)
+        rejected_rewards = config.dpo_beta * (policy_rejected_logps - reference_rejected_logps)
+        accuracy = (chosen_rewards > rejected_rewards).float().mean().item()
+
+    elapsed = time.time() - start_time
+    print(
+        f"Epoch {epoch+1}/{config.dpo_epochs} | "
+        f"Step {global_step} | Loss: {avg_loss:.4f} | "
+        f"Accuracy: {accuracy:.2%} | Time: {elapsed:.0f}s"
+    )
+    return 0.0, time.time()
+
+
 def train_dpo(
     config: MewtwoConfig,
     sft_model_path: str,
@@ -188,24 +207,17 @@ def train_dpo(
     global_step = 0
     for epoch in range(config.dpo_epochs):
         for batch_idx, batch in enumerate(dataloader):
-            # Compute policy log probs
             policy_chosen_logps = compute_log_probs(policy, batch["chosen"], config.device)
             policy_rejected_logps = compute_log_probs(policy, batch["rejected"], config.device)
-
-            # Compute reference log probs (no grad)
             reference_chosen_logps = compute_log_probs(reference, batch["chosen"], config.device)
             reference_rejected_logps = compute_log_probs(reference, batch["rejected"], config.device)
 
-            # DPO loss
             loss = dpo_loss(
-                policy_chosen_logps,
-                policy_rejected_logps,
-                reference_chosen_logps,
-                reference_rejected_logps,
+                policy_chosen_logps, policy_rejected_logps,
+                reference_chosen_logps, reference_rejected_logps,
                 beta=config.dpo_beta,
             )
 
-            # Backward pass
             loss.backward()
             torch.nn.utils.clip_grad_norm_(policy.parameters(), 1.0)
             optimizer.step()
@@ -215,23 +227,11 @@ def train_dpo(
             global_step += 1
 
             if global_step % 10 == 0:
-                avg_loss = total_loss / 10
-                # Compute implicit reward accuracy
-                with torch.no_grad():
-                    chosen_rewards = config.dpo_beta * (policy_chosen_logps - reference_chosen_logps)
-                    rejected_rewards = config.dpo_beta * (policy_rejected_logps - reference_rejected_logps)
-                    accuracy = (chosen_rewards > rejected_rewards).float().mean().item()
-
-                elapsed = time.time() - start_time
-                print(
-                    f"Epoch {epoch+1}/{config.dpo_epochs} | "
-                    f"Step {global_step} | "
-                    f"Loss: {avg_loss:.4f} | "
-                    f"Accuracy: {accuracy:.2%} | "
-                    f"Time: {elapsed:.0f}s"
+                total_loss, start_time = _log_dpo(
+                    epoch, config, global_step, total_loss, start_time,
+                    policy_chosen_logps, policy_rejected_logps,
+                    reference_chosen_logps, reference_rejected_logps,
                 )
-                total_loss = 0.0
-                start_time = time.time()
 
     # Save DPO model
     dpo_path = os.path.join(output_dir, "mewtwo_dpo.pt")

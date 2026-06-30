@@ -103,15 +103,17 @@ class RewardDataset(Dataset):
             tokens = tokens[: self.max_length]
         return tokens
 
-    def __getitem__(self, idx):
-        item = self.data[idx]
-        chosen_tokens = self._tokenize(item["prompt"], item["chosen"])
-        rejected_tokens = self._tokenize(item["prompt"], item["rejected"])
 
-        return {
-            "chosen": torch.tensor(chosen_tokens, dtype=torch.long),
-            "rejected": torch.tensor(rejected_tokens, dtype=torch.long),
-        }
+def _log_rm(epoch, epochs, batch_idx, total_loss, total_correct, total_samples, start_time):
+    """Log reward model training progress."""
+    avg_loss = total_loss / 10
+    accuracy = total_correct / total_samples
+    elapsed = time.time() - start_time
+    print(
+        f"Epoch {epoch+1}/{epochs} | Step {batch_idx+1} | "
+        f"Loss: {avg_loss:.4f} | Accuracy: {accuracy:.2%} | Time: {elapsed:.0f}s"
+    )
+    return 0.0, 0, 0, time.time()
 
 
 def train_reward_model(
@@ -162,14 +164,10 @@ def train_reward_model(
             chosen = batch["chosen"].to(config.device)
             rejected = batch["rejected"].to(config.device)
 
-            # Get rewards
             chosen_rewards = reward_model(chosen)
             rejected_rewards = reward_model(rejected)
-
-            # Pairwise ranking loss
             loss = -F.logsigmoid(chosen_rewards - rejected_rewards).mean()
 
-            # Backward pass
             loss.backward()
             torch.nn.utils.clip_grad_norm_(reward_model.parameters(), 1.0)
             optimizer.step()
@@ -180,20 +178,10 @@ def train_reward_model(
             total_samples += chosen.size(0)
 
             if (batch_idx + 1) % 10 == 0:
-                avg_loss = total_loss / 10
-                accuracy = total_correct / total_samples
-                elapsed = time.time() - start_time
-                print(
-                    f"Epoch {epoch+1}/{epochs} | "
-                    f"Step {batch_idx+1} | "
-                    f"Loss: {avg_loss:.4f} | "
-                    f"Accuracy: {accuracy:.2%} | "
-                    f"Time: {elapsed:.0f}s"
+                total_loss, total_correct, total_samples, start_time = _log_rm(
+                    epoch, epochs, batch_idx, total_loss, total_correct,
+                    total_samples, start_time
                 )
-                total_loss = 0.0
-                total_correct = 0
-                total_samples = 0
-                start_time = time.time()
 
     # Save reward model
     rm_path = os.path.join(output_dir, "mewtwo_rm.pt")

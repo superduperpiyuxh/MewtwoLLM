@@ -103,17 +103,7 @@ def interactive_generation(
             break
 
         if prompt.lower() == "config":
-            print(f"\nCurrent settings: {current_kwargs}")
-            try:
-                key = input("Setting to change: ").strip()
-                if key in current_kwargs:
-                    value = input(f"New value for {key} ({type(current_kwargs[key]).__name__}): ").strip()
-                    current_kwargs[key] = type(current_kwargs[key])(value)
-                    print(f"Updated: {key} = {current_kwargs[key]}")
-                else:
-                    print(f"Unknown setting: {key}")
-            except (ValueError, EOFError):
-                print("Invalid value")
+            current_kwargs = _update_config(current_kwargs)
             continue
 
         if not prompt:
@@ -121,6 +111,22 @@ def interactive_generation(
 
         response = generate(model, tokenizer, prompt, device=device, **current_kwargs)
         print(f"\nMewtwo: {response}\n")
+
+
+def _update_config(current_kwargs):
+    """Update generation settings interactively."""
+    print(f"\nCurrent settings: {current_kwargs}")
+    try:
+        key = input("Setting to change: ").strip()
+        if key in current_kwargs:
+            value = input(f"New value for {key} ({type(current_kwargs[key]).__name__}): ").strip()
+            current_kwargs[key] = type(current_kwargs[key])(value)
+            print(f"Updated: {key} = {current_kwargs[key]}")
+        else:
+            print(f"Unknown setting: {key}")
+    except (ValueError, EOFError):
+        print("Invalid value")
+    return current_kwargs
 
 
 if __name__ == "__main__":
