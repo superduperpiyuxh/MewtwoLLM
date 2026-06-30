@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+eggs/
+*.whl
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data (too large for git)
+data/raw/
+data/processed/
+data/alignment/
+*.bin
+*.npy
+*.pth
+*.pt
+*.safetensors
+*.model
+
+# Model checkpoints
+checkpoints/
+outputs/
+logs/
+wandb/
+runs/
+
+# Tokenizer models
+*.model
+*.vocab
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scraping
+scraped_data/
+*.jsonl

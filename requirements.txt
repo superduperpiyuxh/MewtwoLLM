@@ -1,0 +1,25 @@
+# Core
+torch>=2.0.0
+numpy>=1.24.0
+
+# Tokenization
+sentencepiece>=0.1.99
+tokenizers>=0.15.0
+
+# Data
+datasets>=2.14.0
+huggingface-hub>=0.17.0
+
+# Web Scraping
+scrapling>=0.3.0
+
+# Evaluation
+lm-eval>=0.4.0
+
+# Logging
+tensorboard>=2.14.0
+tqdm>=4.65.0
+
+# Utilities
+pyyaml>=6.0
+rich>=13.0.0
