@@ -130,11 +130,10 @@ def _save_checkpoint(step, model, optimizer, config, checkpoint_dir):
 
 
 def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoints"):
-    """Main training loop."""
+    """Main training loop with optional mixed precision."""
 
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    # Initialize model
     print("=" * 60)
     print("MewtwoLLM Pretraining")
     print("=" * 60)
@@ -142,7 +141,12 @@ def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoin
     model = MewtwoLLM(config)
     model = model.to(config.device)
 
-    # Optimizer
+    # Mixed precision setup
+    use_amp = config.device == "cuda" and hasattr(torch, 'amp')
+    scaler = torch.amp.GradScaler('cuda') if use_amp else None
+    dtype = torch.bfloat16 if use_amp and torch.cuda.is_bf16_supported() else torch.float16 if use_amp else torch.float32
+    print(f"Mixed precision: {'enabled (' + str(dtype) + ')' if use_amp else 'disabled'}")
+
     optimizer = AdamW(
         model.parameters(),
         lr=config.max_lr,
@@ -150,7 +154,6 @@ def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoin
         weight_decay=config.weight_decay,
     )
 
-    # Learning rate scheduler
     scheduler = WSDScheduler(
         optimizer=optimizer,
         warmup_steps=config.warmup_steps,
@@ -160,7 +163,6 @@ def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoin
         min_lr=config.min_lr,
     )
 
-    # Dataset
     dataset = TokenDataset(data_path, block_size=config.context_length)
     dataloader = DataLoader(
         dataset,
@@ -190,16 +192,32 @@ def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoin
                 break
 
             x, y = x.to(config.device), y.to(config.device)
-            logits, loss, _ = model(x, targets=y)
-            loss = loss / config.gradient_accumulation_steps
-            loss.backward()
+
+            # Forward pass with optional mixed precision
+            with torch.amp.autocast('cuda', enabled=use_amp, dtype=dtype):
+                logits, loss, _ = model(x, targets=y)
+                loss = loss / config.gradient_accumulation_steps
+
+            # Backward pass with optional gradient scaling
+            if scaler is not None:
+                scaler.scale(loss).backward()
+            else:
+                loss.backward()
             total_loss += loss.item()
 
             if (batch_idx + 1) % config.gradient_accumulation_steps != 0:
                 continue
 
-            torch.nn.utils.clip_grad_norm_(model.parameters(), config.max_grad_norm)
-            optimizer.step()
+            # Gradient clipping
+            if scaler is not None:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), config.max_grad_norm)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), config.max_grad_norm)
+                optimizer.step()
+
             scheduler.step()
             optimizer.zero_grad()
             step += 1
