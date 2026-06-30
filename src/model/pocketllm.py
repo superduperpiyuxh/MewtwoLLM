@@ -68,6 +68,10 @@ class MewtwoLLM(nn.Module):
 
         # Initialize weights
         self.apply(self._init_weights)
+        # GPT-2 residual scaling: scale residual projections by 1/sqrt(2*n_layers)
+        for block in self.blocks:
+            nn.init.normal_(block.attention.wo.weight, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layers))
+            nn.init.normal_(block.ffn.w2.weight, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layers))
 
         # Report parameter count
         n_params = sum(p.numel() for p in self.parameters())

@@ -112,6 +112,32 @@ def test_param_count():
     print('  PASS: test_param_count')
 
 
+def test_weight_initialization():
+    """Verify GPT-2 style weight initialization with residual scaling."""
+    config = MewtwoConfig()
+    model = MewtwoLLM(config)
+
+    # Check standard weights are ~N(0, 0.02)
+    wq = model.blocks[0].attention.wq.weight
+    assert wq.mean().abs() < 0.05, f'wq mean too large: {wq.mean()}'
+    assert 0.01 < wq.std() < 0.05, f'wq std wrong: {wq.std()}'
+
+    # Check residual projections are scaled smaller
+    wo = model.blocks[0].attention.wo.weight
+    w2 = model.blocks[0].ffn.w2.weight
+    expected_std = 0.02 / (2 * config.n_layers) ** 0.5
+    assert wo.std() < wq.std(), f'wo not scaled: {wo.std()} vs {wq.std()}'
+    assert w2.std() < wq.std(), f'w2 not scaled: {w2.std()} vs {wq.std()}'
+
+    # Check biases are zero
+    for block in model.blocks:
+        if block.attention.wq.bias is not None:
+            assert block.attention.wq.bias.sum() == 0, 'wq bias not zero'
+
+    print(f'  Residual scale std: {wo.std():.6f} (expected ~{expected_std:.6f})')
+    print('  PASS: test_weight_initialization')
+
+
 if __name__ == '__main__':
     print('=' * 60)
     print('MewtwoLLM Test Suite')
@@ -125,6 +151,7 @@ if __name__ == '__main__':
     test_rmsnorm()
     test_swiglu()
     test_weight_tying()
+    test_weight_initialization()
     test_param_count()
 
     print()
