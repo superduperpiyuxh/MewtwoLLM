@@ -110,7 +110,15 @@ class MewtwoLLM(nn.Module):
         x = self.token_embed(idx)
 
         # Create causal mask (lower triangular)
-        mask = torch.tril(torch.ones(T, T, device=device)).unsqueeze(0).unsqueeze(0)
+        # When using KV cache, we need to handle the mask differently
+        if kv_caches is not None:
+            # During generation with KV cache, we attend to all cached + current tokens
+            # No causal masking needed since we only generate one token at a time
+            total_len = T + kv_caches[0][0].size(2) if kv_caches[0] is not None else T
+            mask = torch.ones(1, 1, T, total_len, device=device)
+        else:
+            # During training, use causal mask
+            mask = torch.tril(torch.ones(T, T, device=device)).unsqueeze(0).unsqueeze(0)
 
         # Forward through transformer blocks
         new_kv_caches = []

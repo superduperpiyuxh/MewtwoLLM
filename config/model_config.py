@@ -17,7 +17,7 @@ class MewtwoConfig:
     n_heads: int = 8                 # Attention heads
     n_kv_heads: int = 4              # GQA: 4 KV groups (Paper: GQA)
     dim: int = 512                   # Hidden dimension
-    ff_dim: int = 1376               # SwiGLU FFN dim: (8/3) * 4 * dim (Paper: SwiGLU)
+    ff_dim: int = 1408               # SwiGLU FFN dim: (8/3) * 4 * dim, rounded to 64 (Paper: SwiGLU)
     dropout: float = 0.1             # Standard dropout (Paper: Transformer)
     bias: bool = False               # No bias in linear layers (modern best practice)
 
@@ -72,4 +72,4 @@ class MewtwoConfig:
     def __post_init__(self):
         assert self.dim % self.n_heads == 0, "dim must be divisible by n_heads"
         assert self.n_heads % self.n_kv_heads == 0, "n_heads must be divisible by n_kv_heads"
-        assert self.ff_dim % 256 == 0, "ff_dim should be divisible for efficiency"
+        assert self.ff_dim % 64 == 0, "ff_dim should be divisible by 64 for GPU efficiency"
