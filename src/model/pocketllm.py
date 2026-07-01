@@ -157,6 +157,10 @@ class MewtwoLLM(nn.Module):
 
     def _sample(self, logits: torch.Tensor, temperature: float, top_k: int, top_p: float) -> torch.Tensor:
         """Sample next token from logits with temperature, top-k, and top-p filtering."""
+        # Greedy decoding when temperature is 0
+        if temperature == 0.0:
+            return torch.argmax(logits, dim=-1, keepdim=True)
+
         logits = logits / temperature
 
         if top_k > 0:
