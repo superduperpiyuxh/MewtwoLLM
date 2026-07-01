@@ -141,6 +141,12 @@ def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoin
     model = MewtwoLLM(config)
     model = model.to(config.device)
 
+    # torch.compile() for GPU speedup (PyTorch 2.0+)
+    use_compile = config.device == "cuda" and hasattr(torch, 'compile')
+    if use_compile:
+        model = torch.compile(model)
+        print("torch.compile() enabled")
+
     # Mixed precision setup
     use_amp = config.device == "cuda" and hasattr(torch, 'amp')
     scaler = torch.amp.GradScaler('cuda') if use_amp else None
