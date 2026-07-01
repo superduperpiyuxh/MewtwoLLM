@@ -10,14 +10,14 @@ from dataclasses import dataclass
 class MewtwoConfig:
     """Model configuration based on modern LLM best practices."""
 
-    # Model architecture
+    # Model architecture (scaled to match nanoGPT 124M)
     vocab_size: int = 32000          # SentencePiece BPE (Paper: SentencePiece)
     context_length: int = 1024       # GPT-2 standard
-    n_layers: int = 12               # Depth
-    n_heads: int = 8                 # Attention heads
-    n_kv_heads: int = 4              # GQA: 4 KV groups (Paper: GQA)
-    dim: int = 512                   # Hidden dimension
-    ff_dim: int = 1408               # SwiGLU FFN dim: (8/3) * 4 * dim, rounded to 64 (Paper: SwiGLU)
+    n_layers: int = 12               # Depth (matches GPT-2)
+    n_heads: int = 12                # Attention heads (matches GPT-2)
+    n_kv_heads: int = 6              # GQA: 6 KV groups (Paper: GQA)
+    dim: int = 768                   # Hidden dimension (matches GPT-2)
+    ff_dim: int = 3072               # SwiGLU FFN dim: (8/3) * 4 * dim, rounded to 64 (Paper: SwiGLU)
     dropout: float = 0.0             # No dropout for pretraining (GPT-2 standard)
     bias: bool = False               # No bias in linear layers (modern best practice)
 
