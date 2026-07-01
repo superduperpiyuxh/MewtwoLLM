@@ -18,7 +18,6 @@ import torch.nn.functional as F
 import math
 
 from .rmsnorm import RMSNorm
-from .rope import RotaryEmbedding, apply_rotary_pos_emb
 from .attention import GQAAttention
 from .swiglu import SwiGLU
 from .transformer_block import TransformerBlock
@@ -26,22 +25,22 @@ from .transformer_block import TransformerBlock
 
 class MewtwoLLM(nn.Module):
     """
-    MewtwoLLM: An LLM built from scratch.
+    MewtwoLLM — a GPT-2 class LLM built from scratch.
+    Uses modern LLM techniques: RoPE, RMSNorm, SwiGLU, GQA.
 
     Architecture:
-        tokens -> token_embedding -> [TransformerBlock x N] -> RMSNorm -> lm_head -> logits
+    - Token embedding (no positional embedding — RoPE is inside attention)
+    - 12 Transformer blocks (pre-normalization)
+    - Final RMSNorm
+    - Linear head (tied to token embedding)
 
-    Key design choices:
-        - Pre-normalization (RMSNorm before attention/FFN)
-        - RoPE (rotation-based position encoding)
-        - GQA (grouped query attention)
-        - SwiGLU (gated feed-forward)
-        - Weight tying (embedding = output projection)
+    This matches the nanoGPT architecture with modern improvements.
     """
 
-    def __init__(self, config):
+    def __init__(self, config: MewtwoConfig, use_gradient_checkpointing: bool = False):
         super().__init__()
         self.config = config
+        self.use_gradient_checkpointing = use_gradient_checkpointing
 
         # Token embedding (no positional embedding — RoPE handles position)
         self.token_embed = nn.Embedding(config.vocab_size, config.dim)
@@ -128,7 +127,15 @@ class MewtwoLLM(nn.Module):
         new_kv_caches = []
         for i, block in enumerate(self.blocks):
             cache = kv_caches[i] if kv_caches is not None else None
-            x, new_cache = block(x, mask=mask, kv_cache=cache)
+
+            # Use gradient checkpointing during training to save memory
+            if self.use_gradient_checkpointing and self.training and kv_caches is None:
+                x, new_cache = torch.utils.checkpoint.checkpoint(
+                    block, x, mask=mask, kv_cache=cache,
+                    use_reentrant=False,
+                )
+            else:
+                x, new_cache = block(x, mask=mask, kv_cache=cache)
             new_kv_caches.append(new_cache)
 
         # Final normalization
