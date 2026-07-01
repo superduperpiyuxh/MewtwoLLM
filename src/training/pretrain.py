@@ -28,20 +28,62 @@ from src.model.pocketllm import MewtwoLLM
 
 
 class TokenDataset(Dataset):
-    """Simple dataset that loads tokenized text and creates sliding window chunks."""
+    """Simple dataset that loads text, tokenizes it, and creates sliding window chunks."""
 
-    def __init__(self, token_file: str, block_size: int = 1024):
+    def __init__(self, token_file: str, block_size: int = 1024, tokenizer_path: str = None):
         self.block_size = block_size
 
-        # Load tokens
         with open(token_file, "r") as f:
-            tokens = list(map(int, f.read().split()))
+            content = f.read().strip()
+
+        # Check if file is already tokenized (only integers)
+        try:
+            tokens = list(map(int, content.split()))
+            print(f"Loaded pre-tokenized file: {len(tokens):,} tokens")
+        except ValueError:
+            # Raw text - tokenize it
+            print("Raw text detected, tokenizing with SentencePiece...")
+            tokens = self._tokenize_text(content, tokenizer_path)
 
         self.tokens = torch.tensor(tokens, dtype=torch.long)
         self.n_tokens = len(self.tokens)
         self.n_samples = max(0, self.n_tokens - block_size - 1)
 
         print(f"Dataset: {self.n_tokens:,} tokens, {self.n_samples:,} samples (block_size={block_size})")
+
+    def _tokenize_text(self, text: str, tokenizer_path: str = None) -> list:
+        """Tokenize raw text using SentencePiece."""
+        import sentencepiece as spm
+
+        if tokenizer_path and os.path.exists(tokenizer_path):
+            sp = spm.SentencePieceProcessor()
+            sp.Load(tokenizer_path)
+            tokens = sp.EncodeAsIds(text)
+            print(f"Tokenized with {tokenizer_path}: {len(tokens):,} tokens")
+            return tokens
+
+        # Fallback: train a temporary tokenizer
+        print("No tokenizer found, training temporary SentencePiece...")
+        tmp_input = "/tmp/mewtwo_tmp_corpus.txt"
+        tmp_model = "/tmp/mewtwo_tmp_sp"
+        with open(tmp_input, "w") as f:
+            f.write(text)
+
+        spm.SentencePieceTrainer.Train(
+            input=tmp_input,
+            model_prefix=tmp_model,
+            vocab_size=32000,
+            model_type="bpe",
+            character_coverage=1.0,
+            pad_id=0, unk_id=1, bos_id=2, eos_id=3,
+            num_threads=os.cpu_count(),
+        )
+
+        sp = spm.SentencePieceProcessor()
+        sp.Load(f"{tmp_model}.model")
+        tokens = sp.EncodeAsIds(text)
+        print(f"Trained temporary tokenizer, {len(tokens):,} tokens")
+        return tokens
 
     def __len__(self):
         return self.n_samples
@@ -128,7 +170,7 @@ def _save_checkpoint(step, model, optimizer, config, checkpoint_dir):
     print(f"  Checkpoint saved: {ckpt_path}")
 
 
-def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoints"):
+def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoints", tokenizer_path: str = None):
     """Main training loop with optional mixed precision."""
 
     os.makedirs(checkpoint_dir, exist_ok=True)
@@ -168,7 +210,7 @@ def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoin
         min_lr=config.min_lr,
     )
 
-    dataset = TokenDataset(data_path, block_size=config.context_length)
+    dataset = TokenDataset(data_path, block_size=config.context_length, tokenizer_path=tokenizer_path)
     dataloader = DataLoader(
         dataset,
         batch_size=config.batch_size,
@@ -252,10 +294,10 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Train MewtwoLLM")
-    parser.add_argument("--data", required=True, help="Path to tokenized data file")
+    parser.add_argument("--data", required=True, help="Path to data file (raw text or tokenized)")
+    parser.add_argument("--tokenizer", default=None, help="Path to SentencePiece tokenizer model")
     parser.add_argument("--checkpoint_dir", default="checkpoints", help="Checkpoint directory")
-    parser.add_argument("--resume", default=None, help="Resume from checkpoint")
     args = parser.parse_args()
 
     config = MewtwoConfig()
-    model = train(config, args.data, args.checkpoint_dir)
+    model = train(config, args.data, args.checkpoint_dir, tokenizer_path=args.tokenizer)
