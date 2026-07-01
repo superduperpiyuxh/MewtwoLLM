@@ -183,7 +183,7 @@ def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoin
     model = model.to(config.device)
 
     # torch.compile() for GPU speedup (PyTorch 2.0+)
-    use_compile = getattr(config, 'use_compile', True) and config.device == "cuda" and hasattr(torch, 'compile')
+    use_compile = config.device == "cuda" and hasattr(torch, 'compile')
     if use_compile:
         model = torch.compile(model)
         print("torch.compile() enabled")
