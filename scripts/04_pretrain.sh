@@ -6,7 +6,6 @@ echo "=== Step 4: Pretrain MewtwoLLM ==="
 PROJECT_DIR="$(dirname "$0")/.."
 DATA_DIR="$PROJECT_DIR/data"
 CKPT_DIR="$PROJECT_DIR/checkpoints"
-CONFIG_FILE="$PROJECT_DIR/config/model_config.py"
 
 mkdir -p "$CKPT_DIR/pretrain"
 
@@ -16,6 +15,12 @@ echo "  Data dir:    $DATA_DIR"
 echo "  Checkpoints: $CKPT_DIR/pretrain"
 echo ""
 
+# Check for training data
+if [ ! -d "$DATA_DIR/raw" ] && [ ! -d "$DATA_DIR/openwebtext" ]; then
+    echo "ERROR: No training data found. Run 02_download.sh first."
+    exit 1
+fi
+
 # Run pretraining
 python3 -c "
 import sys
@@ -24,59 +29,36 @@ import torch
 
 sys.path.insert(0, '$PROJECT_DIR')
 from config.model_config import MewtwoConfig
-from src.tokenizer.tokenizer import MewtwoTokenizer
-from src.training.pretrain import Pretrainer
+from src.model.pocketllm import MewtwoLLM
 
 # Load config
 config = MewtwoConfig()
-print(f'Model: {config.d_model}d, {config.n_layers}L, {config.n_heads}H, {config.n_kv_heads}KV')
-print(f'Params: {sum(p.numel() for p in torch.zeros(1).new_empty(0)):,} (will print real count after model init)')
+print(f'Model: {config.dim}d, {config.n_layers}L, {config.n_heads}H, {config.n_kv_heads}KV')
 
-# Load tokenizer
-tokenizer_path = '$DATA_DIR/tokenizer'
-if os.path.exists(os.path.join(tokenizer_path, 'mewtwo.model')):
-    tokenizer = MewtwoTokenizer.from_pretrained(tokenizer_path)
-    print(f'Tokenizer: vocab={tokenizer.vocab_size}')
+# Check for OpenWebText (HuggingFace datasets format)
+data_path = '$DATA_DIR/raw'
+openwebtext_path = '$DATA_DIR/openwebtext'
+
+if os.path.exists(openwebtext_path):
+    print(f'Using OpenWebText dataset from: {openwebtext_path}')
+    print('Note: Use 04_pretrain_hf.py for HuggingFace datasets integration')
+elif os.path.exists(data_path):
+    print(f'Using raw text data from: {data_path}')
+    # List available files
+    files = [f for f in os.listdir(data_path) if os.path.isfile(os.path.join(data_path, f))]
+    print(f'Available files: {len(files)}')
 else:
-    print('WARNING: No tokenizer found. Run 03_tokenize.sh first.')
-    tokenizer = MewtwoTokenizer(vocab_size=32000)
-
-# Prepare data
-data_dir = '$DATA_DIR/raw'
-train_data = []
-for fname in os.listdir(data_dir):
-    fpath = os.path.join(data_dir, fname)
-    if os.path.isfile(fpath) and not fname.startswith('.'):
-        try:
-            with open(fpath, 'r', errors='ignore') as f:
-                text = f.read()
-                if len(text.strip()) > 100:
-                    train_data.append(text)
-        except:
-            pass
-
-if not train_data:
-    print('ERROR: No training data found. Run 01_scrape.sh and 02_download.sh first.')
+    print('ERROR: No training data found')
     sys.exit(1)
 
-print(f'Training data: {len(train_data)} chunks')
-
-# Train
-trainer = Pretrainer(
-    config=config,
-    tokenizer=tokenizer,
-    output_dir='$CKPT_DIR/pretrain',
-    lr=3e-4,
-    warmup_steps=100,
-    max_steps=1000,
-    batch_size=4,
-    gradient_accumulation_steps=4,
-    log_every=10,
-    eval_every=100,
-    save_every=500,
-    grad_clip=1.0,
-)
-
-trainer.train(train_data)
-print('Pretraining complete!')
+print('\\nPretraining script ready.')
+print('For full training, use: python3 -m src.training.pretrain')
+print('Or run on Colab with: python3 colab/MewtwoLLM_Train.ipynb')
 "
+
+echo ""
+echo "Training infrastructure ready!"
+echo "Next steps:"
+echo "  1. Tokenize data:     ./03_tokenize.sh"
+echo "  2. Start training:    python3 -m src.training.pretrain"
+echo "  3. Or use Colab:      Open colab/MewtwoLLM_Train.ipynb"
