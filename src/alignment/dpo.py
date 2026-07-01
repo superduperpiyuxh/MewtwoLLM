@@ -169,13 +169,18 @@ def train_dpo(
     # SECURITY: weights_only=False needed for config object; only load trusted checkpoints
     checkpoint = torch.load(sft_model_path, map_location=config.device, weights_only=False)
     sft_config = checkpoint["config"]
+
+    # Strip torch.compile() prefix if present
+    state_dict = checkpoint["model_state_dict"]
+    cleaned = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+
     policy = MewtwoLLM(sft_config)
-    policy.load_state_dict(checkpoint["model_state_dict"])
+    policy.load_state_dict(cleaned)
     policy = policy.to(config.device)
 
     # Reference model (frozen copy of SFT model)
     reference = MewtwoLLM(sft_config)
-    reference.load_state_dict(checkpoint["model_state_dict"])
+    reference.load_state_dict(cleaned)
     reference = reference.to(config.device)
     reference.eval()
     for param in reference.parameters():

@@ -146,7 +146,11 @@ if __name__ == "__main__":
     checkpoint = torch.load(args.model, map_location="cpu", weights_only=False)
     config = checkpoint["config"]
     model = MewtwoLLM(config)
-    model.load_state_dict(checkpoint["model_state_dict"])
+
+    # Strip torch.compile() prefix if present
+    state_dict = checkpoint["model_state_dict"]
+    cleaned = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+    model.load_state_dict(cleaned)
     model = model.to(config.device)
 
     # Load tokenizer

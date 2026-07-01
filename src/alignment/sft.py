@@ -132,7 +132,11 @@ def train_sft(
     checkpoint = torch.load(model_path, map_location=config.device, weights_only=False)
     sft_config = checkpoint["config"]
     model = MewtwoLLM(sft_config)
-    model.load_state_dict(checkpoint["model_state_dict"])
+
+    # Strip torch.compile() prefix if present
+    state_dict = checkpoint["model_state_dict"]
+    cleaned = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+    model.load_state_dict(cleaned)
     model = model.to(config.device)
     print(f"Loaded pretrained model from {model_path}")
 
