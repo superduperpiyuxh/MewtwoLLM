@@ -18,8 +18,8 @@ where y_w = preferred response, y_l = rejected response.
 
 import os
 import json
+import contextlib
 import time
-from pathlib import Path
 
 import torch
 import torch.nn.functional as F
@@ -103,13 +103,21 @@ def dpo_loss(
     return -F.logsigmoid(logits).mean()
 
 
-def compute_log_probs(model, tokens, device):
-    """Compute log probabilities of tokens under the model."""
+def compute_log_probs(model, tokens, device, no_grad=False):
+    """Compute log probabilities of tokens under the model.
+
+    Args:
+        model: The language model
+        tokens: Token IDs (B, T)
+        device: Device to use
+        no_grad: If True, disable gradient computation (for reference model)
+    """
     tokens = tokens.to(device)
     input_ids = tokens[:, :-1]
     targets = tokens[:, 1:]
 
-    with torch.no_grad():
+    context = torch.no_grad() if no_grad else contextlib.nullcontext()
+    with context:
         logits, _, _ = model(input_ids)
 
     log_probs = F.log_softmax(logits, dim=-1)
@@ -206,10 +214,10 @@ def train_dpo(
     global_step = 0
     for epoch in range(config.dpo_epochs):
         for batch_idx, batch in enumerate(dataloader):
-            policy_chosen_logps = compute_log_probs(policy, batch["chosen"], config.device)
-            policy_rejected_logps = compute_log_probs(policy, batch["rejected"], config.device)
-            reference_chosen_logps = compute_log_probs(reference, batch["chosen"], config.device)
-            reference_rejected_logps = compute_log_probs(reference, batch["rejected"], config.device)
+            policy_chosen_logps = compute_log_probs(policy, batch["chosen"], config.device, no_grad=False)
+            policy_rejected_logps = compute_log_probs(policy, batch["rejected"], config.device, no_grad=False)
+            reference_chosen_logps = compute_log_probs(reference, batch["chosen"], config.device, no_grad=True)
+            reference_rejected_logps = compute_log_probs(reference, batch["rejected"], config.device, no_grad=True)
 
             loss = dpo_loss(
                 policy_chosen_logps, policy_rejected_logps,

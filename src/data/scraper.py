@@ -13,7 +13,6 @@ Scraping targets:
 import os
 import json
 import time
-from pathlib import Path
 
 # Scrapling imports
 from scrapling.fetchers import Fetcher

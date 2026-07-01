@@ -17,7 +17,7 @@ class MewtwoConfig:
     n_heads: int = 12                # Attention heads (matches GPT-2)
     n_kv_heads: int = 6              # GQA: 6 KV groups (Paper: GQA)
     dim: int = 768                   # Hidden dimension (matches GPT-2)
-    ff_dim: int = 3072               # SwiGLU FFN dim: (8/3) * 4 * dim, rounded to 64 (Paper: SwiGLU)
+    ff_dim: int = 3072               # SwiGLU FFN dim: 4 * dim (Paper: SwiGLU)
     dropout: float = 0.0             # No dropout for pretraining (GPT-2 standard)
     bias: bool = False               # No bias in linear layers (modern best practice)
 

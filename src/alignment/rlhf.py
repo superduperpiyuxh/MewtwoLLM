@@ -15,7 +15,6 @@ PPO objective:
 import os
 import json
 import time
-from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -94,9 +93,18 @@ class RewardDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
+    def __getitem__(self, idx):
+        item = self.data[idx]
+        chosen_tokens = self._tokenize(item["prompt"], item["chosen"])
+        rejected_tokens = self._tokenize(item["prompt"], item["rejected"])
+        return {
+            "chosen": chosen_tokens,
+            "rejected": rejected_tokens,
+        }
+
     def _tokenize(self, prompt: str, response: str) -> list[int]:
         full_text = f"{prompt}\n\n{response}"
-        tokens = self.tokenizer.encode(full_text, out_type=int)
+        tokens = self.tokenizer.encode(full_text)
         if len(tokens) > self.max_length:
             tokens = tokens[: self.max_length]
         return tokens

@@ -55,7 +55,8 @@ def compute_perplexity(model, data_path, device="cpu", block_size=1024, batch_si
             x, y = x.to(device), y.to(device)
             logits, loss, _ = model(x, targets=y)
 
-            mask = (y != 0).float()
+            # Use -1 as ignore index (matches model's cross_entropy ignore_index=-1)
+            mask = (y != -1).float()
             n_tokens = mask.sum().item()
 
             total_loss += loss.item() * n_tokens
@@ -267,8 +268,8 @@ def evaluate(
 
     # MMLU evaluation
     if mmlu_data_dir:
-        from src.tokenizer.tokenizer import MewtwoTokenizer
-        tokenizer = MewtwoTokenizer()
+        from src.tokenizer.tokenizer import load_tokenizer
+        tokenizer = load_tokenizer()
         mmlu_results = evaluate_mmlu(
             model, tokenizer, mmlu_data_dir, device, n_shots
         )

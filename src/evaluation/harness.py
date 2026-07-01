@@ -22,17 +22,18 @@ class MewtwoLMEval:
     Wrapper for lm-evaluation-harness.
 
     Usage:
-        model = MewtwoLMEval.from_pretrained("path/to/checkpoint")
+        model = MewtwoLMEval.from_pretrained("path/to/checkpoint", tokenizer_path="path/to/tokenizer")
         results = model.evaluate(tasks=["mmlu", "hellaswag", "winogrande"])
     """
 
-    def __init__(self, model: MewtwoLLM, config: MewtwoConfig):
+    def __init__(self, model: MewtwoLLM, config: MewtwoConfig, tokenizer=None):
         self.model = model
         self.config = config
+        self.tokenizer = tokenizer
         self.model.eval()
 
     @classmethod
-    def from_pretrained(cls, path: str, device: str = "cpu"):
+    def from_pretrained(cls, path: str, device: str = "cpu", tokenizer_path: str = None):
         """Load model from checkpoint."""
         # SECURITY: weights_only=False needed for config object; only load trusted checkpoints
         checkpoint = torch.load(path, map_location=device, weights_only=False)
@@ -40,7 +41,14 @@ class MewtwoLMEval:
         model = MewtwoLLM(config)
         model.load_state_dict(checkpoint["model_state_dict"])
         model = model.to(device)
-        return cls(model, config)
+
+        # Load tokenizer
+        tokenizer = None
+        if tokenizer_path:
+            from src.tokenizer.tokenizer import load_tokenizer
+            tokenizer = load_tokenizer(tokenizer_path)
+
+        return cls(model, config, tokenizer)
 
     def loglikelihood(self, context: str, continuation: str) -> float:
         """
@@ -53,12 +61,12 @@ class MewtwoLMEval:
         Returns:
             Log-likelihood score
         """
-        from src.tokenizer.tokenizer import MewtwoTokenizer
-        tokenizer = MewtwoTokenizer()
+        if self.tokenizer is None:
+            raise RuntimeError("Tokenizer not loaded. Pass tokenizer_path to from_pretrained().")
 
         # Tokenize
-        context_tokens = tokenizer.encode(context)
-        continuation_tokens = tokenizer.encode(continuation)
+        context_tokens = self.tokenizer.encode(context)
+        continuation_tokens = self.tokenizer.encode(continuation)
 
         # Combine
         full_tokens = context_tokens + continuation_tokens
@@ -95,10 +103,10 @@ class MewtwoLMEval:
         Returns:
             Generated continuation string
         """
-        from src.tokenizer.tokenizer import MewtwoTokenizer
-        tokenizer = MewtwoTokenizer()
+        if self.tokenizer is None:
+            raise RuntimeError("Tokenizer not loaded. Pass tokenizer_path to from_pretrained().")
 
-        tokens = tokenizer.encode(context)
+        tokens = self.tokenizer.encode(context)
         input_ids = torch.tensor([tokens], dtype=torch.long, device=self.model.token_embed.weight.device)
 
         output = self.model.generate(
@@ -108,7 +116,7 @@ class MewtwoLMEval:
             top_k=kwargs.get("top_k", 1),
         )
 
-        generated = tokenizer.decode(output[0].tolist())
+        generated = self.tokenizer.decode(output[0].tolist())
         # Remove the context from the generated text
         continuation = generated[len(context):]
 
@@ -155,16 +163,17 @@ class MewtwoLMEval:
     def _eval_mmlu(self, num_fewshot: int) -> dict:
         """Evaluate MMLU."""
         from src.evaluation.eval import evaluate_mmlu
-        from src.tokenizer.tokenizer import MewtwoTokenizer
 
-        tokenizer = MewtwoTokenizer()
+        if self.tokenizer is None:
+            return {"error": "Tokenizer not loaded. Pass tokenizer_path to from_pretrained()."}
+
         # Use default MMLU data directory
         data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data", "mmlu")
 
         if not os.path.exists(data_dir):
             return {"error": "MMLU data not found. Run download script first."}
 
-        results = evaluate_mmlu(self.model, tokenizer, data_dir, num_fewshot=num_fewshot)
+        results = evaluate_mmlu(self.model, self.tokenizer, data_dir, num_fewshot=num_fewshot)
         return {"accuracy": results["overall_accuracy"], "details": results}
 
     def _eval_hellaswag(self, num_fewshot: int) -> dict:

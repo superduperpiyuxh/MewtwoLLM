@@ -29,16 +29,19 @@ def main():
 
     # Find and upload best checkpoint
     uploaded = False
-    for stage in ["dpo", "sft", "pretrain"]:
-        ckpt = os.path.join(args.checkpoint_dir, stage, "best_model.pt")
-        if os.path.exists(ckpt):
-            print(f"Uploading {stage} checkpoint...")
-            api.upload_file(
-                path_or_fileobj=ckpt,
-                path_in_repo=f"{stage}/best_model.pt",
-                repo_id=args.repo,
-            )
-            uploaded = True
+    for stage in ["rlhf", "dpo", "sft", "pretrain"]:
+        for name in ["mewtwo_final.pt", "mewtwo_best.pt", "model.pt"]:
+            ckpt = os.path.join(args.checkpoint_dir, stage, name)
+            if os.path.exists(ckpt):
+                print(f"Uploading {stage}/{name}...")
+                api.upload_file(
+                    path_or_fileobj=ckpt,
+                    path_in_repo=f"{stage}/{name}",
+                    repo_id=args.repo,
+                )
+                uploaded = True
+                break
+        if uploaded:
             break
 
     if not uploaded:

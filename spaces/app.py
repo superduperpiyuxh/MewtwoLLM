@@ -7,27 +7,30 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
 import gradio as gr
 from src.model.pocketllm import MewtwoLLM
-from src.tokenizer.tokenizer import MewtwoTokenizer
+from src.tokenizer.tokenizer import load_tokenizer
 from src.inference.generate import generate
 from config.model_config import MewtwoConfig
 
 # Load model and tokenizer
 config = MewtwoConfig()
-tokenizer = MewtwoTokenizer.from_pretrained("tokenizer")
+tokenizer = load_tokenizer("data/tokenizer/mewtwo.model")
 model = MewtwoLLM(config)
 
-# Load checkpoint
-import os
-for stage in ["dpo", "sft", "pretrain"]:
-    ckpt = f"{stage}/best_model.pt"
-    if os.path.exists(ckpt):
-        checkpoint = torch.load(ckpt, map_location="cpu", weights_only=False)
-        if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-            model.load_state_dict(checkpoint["model_state_dict"])
-        else:
-            model.load_state_dict(checkpoint)
-        print(f"Loaded checkpoint: {ckpt}")
-        break
+# Load checkpoint (try different naming conventions)
+for stage in ["rlhf", "dpo", "sft", "pretrain"]:
+    for name in ["mewtwo_final.pt", "mewtwo_best.pt", "model.pt"]:
+        ckpt = f"checkpoints/{stage}/{name}"
+        if os.path.exists(ckpt):
+            checkpoint = torch.load(ckpt, map_location="cpu", weights_only=False)
+            if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+                model.load_state_dict(checkpoint["model_state_dict"])
+            else:
+                model.load_state_dict(checkpoint)
+            print(f"Loaded checkpoint: {ckpt}")
+            break
+    else:
+        continue
+    break
 
 model.eval()
 n_params = sum(p.numel() for p in model.parameters())
@@ -60,8 +63,8 @@ demo = gr.Interface(
         gr.Slider(minimum=0.5, maximum=1.0, value=0.95, step=0.05, label="Top-P"),
     ],
     outputs=gr.Textbox(label="Generated Text", lines=10),
-    title="MewtwoLLM — 40M Parameter LLM",
-    description=f"A {n_params/1e6:.0f}M parameter language model built from scratch with RoPE + RMSNorm + SwiGLU + GQA. Trained on scraped web data.",
+    title=f"MewtwoLLM — {n_params/1e6:.0f}M Parameter LLM",
+    description="A language model built from scratch with RoPE + RMSNorm + SwiGLU + GQA.",
     theme=gr.themes.Soft(),
 )
 

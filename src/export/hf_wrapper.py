@@ -125,10 +125,19 @@ class MewtwoForSequenceClassification(nn.Module):
     @classmethod
     def from_pretrained(cls, path: str, device: str = "cpu"):
         """Load model from checkpoint."""
-        checkpoint = torch.load(path, map_location=device)
+        # SECURITY: weights_only=False needed for config object; only load trusted checkpoints
+        checkpoint = torch.load(path, map_location=device, weights_only=False)
         config = checkpoint["config"]
         model = cls(config)
-        model.load_state_dict(checkpoint["model_state_dict"])
+
+        # Map checkpoint keys to wrapped model keys
+        state_dict = checkpoint["model_state_dict"]
+        new_state_dict = {}
+        for k, v in state_dict.items():
+            new_key = f"mewtwo.{k}" if not k.startswith("mewtwo.") else k
+            new_state_dict[new_key] = v
+
+        model.load_state_dict(new_state_dict, strict=False)
         model = model.to(device)
         return model
 

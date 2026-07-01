@@ -74,8 +74,15 @@ class MewtwoTokenizer:
     def eos_id(self):
         return self._eos_id
 
-    def encode(self, text: str, add_bos: bool = True, add_eos: bool = True) -> list:
-        """Encode text to token IDs."""
+    def encode(self, text: str, add_bos: bool = True, add_eos: bool = True, out_type=None) -> list:
+        """Encode text to token IDs.
+
+        Args:
+            text: Input text to encode
+            add_bos: Whether to add BOS token (currently handled by SentencePiece)
+            add_eos: Whether to add EOS token (currently handled by SentencePiece)
+            out_type: Output type (for backward compatibility, ignored — always returns int)
+        """
         if self.sp is None:
             raise RuntimeError("Tokenizer not trained or loaded. Call train() or from_pretrained().")
         return self.sp.encode(text, out_type=int)
@@ -85,14 +92,6 @@ class MewtwoTokenizer:
         if self.sp is None:
             raise RuntimeError("Tokenizer not trained or loaded.")
         return self.sp.decode(ids)
-
-    def tokenize(self, text: str) -> list:
-        """Encode text to token IDs (alias for encode)."""
-        return self.encode(text)
-
-    def detokenize(self, ids: list) -> str:
-        """Decode token IDs to text (alias for decode)."""
-        return self.decode(ids)
 
     def __len__(self):
         return self.vocab_size
@@ -134,8 +133,12 @@ def load_tokenizer(model_path: str = "mewtwo_tokenizer.model"):
     """Load a trained SentencePiece tokenizer and return MewtwoTokenizer wrapper."""
     tokenizer = MewtwoTokenizer.__new__(MewtwoTokenizer)
     tokenizer.sp = spm.SentencePieceProcessor()
-    tokenizer.sp.Load(model_path)
-    tokenizer._vocab_size = tokenizer.sp.GetPieceSize()
+    tokenizer.sp.load(model_path)
+    tokenizer.vocab_size = tokenizer.sp.get_piece_size()
+    tokenizer._pad_id = 0
+    tokenizer._unk_id = 1
+    tokenizer._bos_id = 2
+    tokenizer._eos_id = 3
     return tokenizer
 
 
@@ -145,12 +148,12 @@ def tokenize_file(
     tokenizer_path: str = "mewtwo_tokenizer.model",
 ):
     """Tokenize a text file and save as token IDs."""
-    sp = load_tokenizer(tokenizer_path)
+    tokenizer = load_tokenizer(tokenizer_path)
 
     with open(input_path, "r", encoding="utf-8") as f:
         text = f.read()
 
-    tokens = sp.encode(text, out_type=int)
+    tokens = tokenizer.encode(text)
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(" ".join(map(str, tokens)))

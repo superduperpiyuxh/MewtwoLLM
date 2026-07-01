@@ -7,7 +7,6 @@ Exports model weights to GGUF format for use with llama.cpp.
 import os
 import sys
 import struct
-from pathlib import Path
 
 import torch
 import numpy as np

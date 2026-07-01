@@ -11,7 +11,6 @@ import os
 import sys
 import mmap
 import struct
-from pathlib import Path
 
 import torch
 from torch.utils.data import Dataset
