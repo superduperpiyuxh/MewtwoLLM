@@ -131,10 +131,12 @@ def train_tokenizer(
 
 
 def load_tokenizer(model_path: str = "mewtwo_tokenizer.model"):
-    """Load a trained SentencePiece tokenizer (standalone function)."""
-    sp = spm.SentencePieceProcessor()
-    sp.load(model_path)
-    return sp
+    """Load a trained SentencePiece tokenizer and return MewtwoTokenizer wrapper."""
+    tokenizer = MewtwoTokenizer.__new__(MewtwoTokenizer)
+    tokenizer.sp = spm.SentencePieceProcessor()
+    tokenizer.sp.Load(model_path)
+    tokenizer._vocab_size = tokenizer.sp.GetPieceSize()
+    return tokenizer
 
 
 def tokenize_file(

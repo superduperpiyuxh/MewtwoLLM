@@ -142,7 +142,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Load model
-    checkpoint = torch.load(args.model, map_location="cpu")
+    # SECURITY: weights_only=False needed for config object; only load trusted checkpoints
+    checkpoint = torch.load(args.model, map_location="cpu", weights_only=False)
     config = checkpoint["config"]
     model = MewtwoLLM(config)
     model.load_state_dict(checkpoint["model_state_dict"])

@@ -22,18 +22,18 @@ os.makedirs(data_dir, exist_ok=True)
 preferences = [
     {
         'prompt': 'What is machine learning?',
-        'chosen': 'Machine learning is a subset of artificial intelligence where systems learn patterns from data to make predictions or decisions without being explicitly programmed. The key types are supervised learning (learning from labeled examples), unsupervised learning (finding patterns in unlabeled data), and reinforcement learning (learning through trial and error with rewards).',
-        'rejected': 'idk lol its when computers learn stuff i guess. like they look at data and figure things out maybe.'
+        'chosen': 'Machine learning is a subset of artificial intelligence where systems learn patterns from data.',
+        'rejected': 'idk lol its when computers learn stuff i guess.'
     },
     {
         'prompt': 'Explain gradient descent.',
-        'chosen': 'Gradient descent is an optimization algorithm that iteratively adjusts model parameters to minimize a loss function. At each step, it computes the gradient (direction of steepest increase) of the loss with respect to the parameters, then moves in the opposite direction. The step size is controlled by the learning rate. Variants include SGD, Adam, and AdaFactor.',
-        'rejected': 'gradient descent is when you go downhill on a graph. you follow the slope down until you reach the bottom.'
+        'chosen': 'Gradient descent is an optimization algorithm that iteratively adjusts model parameters to minimize a loss function.',
+        'rejected': 'gradient descent is when you go downhill on a graph.'
     },
     {
         'prompt': 'What is attention in transformers?',
-        'chosen': 'Attention in transformers computes a weighted sum of all input tokens for each output position. For each token, it creates a query (what am I looking for?), a key (what do I contain?), and a value (what information do I provide?). The attention score between two tokens is the dot product of their query and key, scaled and softmaxed. This allows the model to focus on relevant parts of the input.',
-        'rejected': 'attention is when the model pays attention to important words. it uses some math to figure out which words matter more than others.'
+        'chosen': 'Attention computes a weighted sum of all input tokens for each output position.',
+        'rejected': 'attention is when the model pays attention to important words.'
     },
 ]
 
@@ -50,34 +50,27 @@ echo "Starting DPO alignment..."
 python3 -c "
 import sys
 import os
-import torch
 
 sys.path.insert(0, '$PROJECT_DIR')
 from config.model_config import MewtwoConfig
-from src.tokenizer.tokenizer import MewtwoTokenizer
-from src.alignment.dpo import DPOTrainer
+from src.alignment.dpo import train_dpo
 
 config = MewtwoConfig()
-tokenizer = MewtwoTokenizer.from_pretrained('$DATA_DIR/tokenizer')
 
 # Load SFT checkpoint
 sft_ckpt = '$CKPT_DIR/sft/best_model.pt'
-if os.path.exists(sft_ckpt):
-    print(f'Loading SFT checkpoint: {sft_ckpt}')
-else:
-    print('WARNING: No SFT checkpoint found. Using pretrain checkpoint.')
+if not os.path.exists(sft_ckpt):
+    sft_ckpt = '$CKPT_DIR/sft/model.pt'
+if not os.path.exists(sft_ckpt):
+    print('ERROR: No SFT checkpoint found. Run 05_sft.sh first.')
+    sys.exit(1)
 
-dpo = DPOTrainer(
+train_dpo(
     config=config,
-    tokenizer=tokenizer,
+    model_path=sft_ckpt,
+    data_path='$DATA_DIR/preference/preferences.jsonl',
+    tokenizer_path='$DATA_DIR/tokenizer/mewtwo.model',
     output_dir='$CKPT_DIR/dpo',
-    lr=5e-6,
-    max_steps=200,
-    batch_size=2,
-    gradient_accumulation_steps=4,
-    beta=0.1,
 )
-
-dpo.train('$DATA_DIR/preference/preferences.jsonl')
 print('DPO alignment complete!')
 "

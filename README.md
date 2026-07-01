@@ -21,12 +21,12 @@ Like Mewtwo itself, this model is **engineered intelligence**. Every architectur
 
 | Parameter | Value |
 |-----------|-------|
-| Parameters | ~40M |
+| Parameters | ~130M |
 | Layers | 12 |
-| Hidden Dim | 512 |
-| Attention Heads | 8 |
-| KV Groups | 4 |
-| FFN Hidden Dim | 1376 |
+| Hidden Dim | 768 |
+| Attention Heads | 12 |
+| KV Groups | 6 (GQA) |
+| FFN Hidden Dim | 3072 |
 | Context Length | 1024 |
 | Vocab Size | 32,000 |
 

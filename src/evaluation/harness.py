@@ -34,7 +34,8 @@ class MewtwoLMEval:
     @classmethod
     def from_pretrained(cls, path: str, device: str = "cpu"):
         """Load model from checkpoint."""
-        checkpoint = torch.load(path, map_location=device)
+        # SECURITY: weights_only=False needed for config object; only load trusted checkpoints
+        checkpoint = torch.load(path, map_location=device, weights_only=False)
         config = checkpoint["config"]
         model = MewtwoLLM(config)
         model.load_state_dict(checkpoint["model_state_dict"])

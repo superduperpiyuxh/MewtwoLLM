@@ -103,17 +103,32 @@ class GQAAttention(nn.Module):
         # Use PyTorch SDPA (automatically uses FlashAttention on GPU)
         if hasattr(F, 'scaled_dot_product_attention'):
             # SDPA handles scaling internally; pass causal mask as attn_mask
+            # mask dimensions: (1, 1, T, total_len) or (1, 1, T, T)
+            # After KV concatenation, k/v have shape (B, n_kv, total_len, head_dim)
+            # So we need mask with last dim matching total_len
+            if mask is not None:
+                # Use mask as-is if dimensions match, otherwise slice
+                if mask.dim() == 4:
+                    attn_mask = mask[:, :, :T, :k.size(2)]
+                else:
+                    attn_mask = mask[:T, :T]
+            else:
+                attn_mask = None
             out = F.scaled_dot_product_attention(
                 q, k, v,
-                attn_mask=mask[:T, :T] if mask is not None else None,
-                dropout_p=0.0,  # Dropout handled by TransformerBlock
-                is_causal=False,  # We provide explicit mask
+                attn_mask=attn_mask,
+                dropout_p=0.0,
+                is_causal=False,
             )
         else:
             # Fallback to manual attention
             attn = torch.matmul(q, k.transpose(-2, -1)) * self.scale
             if mask is not None:
-                attn = attn.masked_fill(mask[:T, :T] == 0, float("-inf"))
+                if mask.dim() == 4:
+                    m = mask[:, :, :T, :k.size(2)]
+                else:
+                    m = mask[:T, :T]
+                attn = attn.masked_fill(m == 0, float("-inf"))
             attn = F.softmax(attn, dim=-1)
             out = torch.matmul(attn, v)
 

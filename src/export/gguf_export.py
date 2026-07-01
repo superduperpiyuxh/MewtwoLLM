@@ -148,7 +148,8 @@ if __name__ == "__main__":
     from config.model_config import MewtwoConfig
     from src.model.pocketllm import MewtwoLLM
 
-    checkpoint = torch.load(args.checkpoint, map_location="cpu")
+    # SECURITY: weights_only=False needed for config object; only load trusted checkpoints
+    checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     config = checkpoint["config"]
     model = MewtwoLLM(config)
     model.load_state_dict(checkpoint["model_state_dict"])

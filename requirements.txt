@@ -1,2 +1,17 @@
-torch
-sentencepiece
+# Core dependencies
+torch>=2.0.0
+numpy>=1.24.0
+sentencepiece>=0.1.99
+
+# HuggingFace ecosystem
+huggingface_hub>=0.14.0
+datasets>=2.14.0
+
+# Web scraping (for data collection)
+scrapling>=0.1.0
+
+# Evaluation
+pytest>=7.0.0
+
+# Inference server (optional)
+gradio>=3.50.0

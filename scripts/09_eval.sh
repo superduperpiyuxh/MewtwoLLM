@@ -15,11 +15,9 @@ import torch
 sys.path.insert(0, '$PROJECT_DIR')
 from config.model_config import MewtwoConfig
 from src.model.pocketllm import MewtwoLLM
-from src.tokenizer.tokenizer import MewtwoTokenizer
-from src.evaluation.eval import evaluate_perplexity
+from src.evaluation.eval import compute_perplexity
 
 config = MewtwoConfig()
-tokenizer = MewtwoTokenizer.from_pretrained('$DATA_DIR/tokenizer')
 
 model = MewtwoLLM(config)
 model.eval()
@@ -44,22 +42,17 @@ else:
 
 # Evaluate on scraped data
 data_dir = '$DATA_DIR/raw'
-texts = []
+token_file = None
 for fname in os.listdir(data_dir):
     fpath = os.path.join(data_dir, fname)
-    if os.path.isfile(fpath) and not fname.startswith('.'):
-        try:
-            with open(fpath, 'r', errors='ignore') as f:
-                text = f.read()
-                if len(text.strip()) > 200:
-                    texts.append(text[:5000])
-        except:
-            pass
+    if fname.endswith('.tokens'):
+        token_file = fpath
+        break
 
-if texts:
-    results = evaluate_perplexity(model, tokenizer, texts[:5])
+if token_file:
+    results = compute_perplexity(model, token_file, device='cpu')
     print(f'Perplexity: {results[\"perplexity\"]:.2f}')
     print(f'Loss: {results[\"loss\"]:.4f}')
 else:
-    print('No evaluation data found. Run 01_scrape.sh first.')
+    print('No tokenized data found. Run 03_tokenize.sh first.')
 "

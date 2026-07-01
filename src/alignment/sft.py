@@ -56,7 +56,13 @@ class InstructionDataset(Dataset):
         self.max_length = max_length
 
         with open(data_path, "r") as f:
-            self.data = json.load(f)
+            content = f.read().strip()
+
+        # Support both JSON array and JSONL formats
+        if content.startswith("["):
+            self.data = json.loads(content)
+        else:
+            self.data = [json.loads(line) for line in content.split("\n") if line.strip()]
 
         print(f"Loaded {len(self.data)} instruction examples")
 
@@ -123,7 +129,8 @@ def train_sft(
     tokenizer = load_tokenizer(tokenizer_path)
 
     # Load pretrained model
-    checkpoint = torch.load(model_path, map_location=config.device)
+    # SECURITY: weights_only=False needed for config object; only load trusted checkpoints
+    checkpoint = torch.load(model_path, map_location=config.device, weights_only=False)
     sft_config = checkpoint["config"]
     model = MewtwoLLM(sft_config)
     model.load_state_dict(checkpoint["model_state_dict"])

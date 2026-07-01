@@ -17,6 +17,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+
+from config.model_config import MewtwoConfig
 from .rmsnorm import RMSNorm
 from .attention import GQAAttention
 from .swiglu import SwiGLU
@@ -73,10 +78,9 @@ class MewtwoLLM(nn.Module):
             nn.init.normal_(block.ffn.w2.weight, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layers))
 
         # Report parameter count
+        # Note: tied weights (token_embed + lm_head) are counted once by PyTorch
         n_params = sum(p.numel() for p in self.parameters())
-        # Subtract token embedding (tied, counted once)
-        n_params -= self.token_embed.weight.numel()
-        print(f"MewtwoLLM initialized: {n_params:,} parameters (excluding tied embedding)")
+        print(f"MewtwoLLM initialized: {n_params:,} parameters")
 
     def _init_weights(self, module):
         """Initialize weights using scaled normal initialization."""

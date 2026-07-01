@@ -73,15 +73,7 @@ class RewardDataset(Dataset):
     """
     Dataset for reward model training.
 
-    Expected JSON format:
-    [
-        {
-            "prompt": "...",
-            "chosen": "...",
-            "rejected": "..."
-        },
-        ...
-    ]
+    Supports both JSON array and JSONL formats.
     """
 
     def __init__(self, data_path: str, tokenizer, max_length: int = 1024):
@@ -89,7 +81,13 @@ class RewardDataset(Dataset):
         self.max_length = max_length
 
         with open(data_path, "r") as f:
-            self.data = json.load(f)
+            content = f.read().strip()
+
+        # Support both JSON array and JSONL formats
+        if content.startswith("["):
+            self.data = json.loads(content)
+        else:
+            self.data = [json.loads(line) for line in content.split("\n") if line.strip()]
 
         print(f"Loaded {len(self.data)} preference pairs for reward model")
 
@@ -135,7 +133,8 @@ def train_reward_model(
     tokenizer = load_tokenizer(tokenizer_path)
 
     # Load SFT model
-    checkpoint = torch.load(sft_model_path, map_location=config.device)
+    # SECURITY: weights_only=False needed for config object; only load trusted checkpoints
+    checkpoint = torch.load(sft_model_path, map_location=config.device, weights_only=False)
     sft_config = checkpoint["config"]
     base_model = MewtwoLLM(sft_config)
     base_model.load_state_dict(checkpoint["model_state_dict"])
@@ -299,7 +298,8 @@ def train_rlhf(
     tokenizer = load_tokenizer(tokenizer_path)
 
     # Load models
-    checkpoint = torch.load(sft_model_path, map_location=config.device)
+    # SECURITY: weights_only=False needed for config object; only load trusted checkpoints
+    checkpoint = torch.load(sft_model_path, map_location=config.device, weights_only=False)
     sft_config = checkpoint["config"]
 
     policy = MewtwoLLM(sft_config)
@@ -313,7 +313,8 @@ def train_rlhf(
     for param in reference.parameters():
         param.requires_grad = False
 
-    rm_checkpoint = torch.load(rm_path, map_location=config.device)
+    # SECURITY: weights_only=False needed for config object; only load trusted checkpoints
+    rm_checkpoint = torch.load(rm_path, map_location=config.device, weights_only=False)
     base_model = MewtwoLLM(sft_config)
     reward_model = RewardModel(base_model)
     reward_model.load_state_dict(rm_checkpoint["model_state_dict"])

@@ -40,34 +40,27 @@ echo "Starting RLHF alignment..."
 python3 -c "
 import sys
 import os
-import torch
 
 sys.path.insert(0, '$PROJECT_DIR')
 from config.model_config import MewtwoConfig
-from src.tokenizer.tokenizer import MewtwoTokenizer
-from src.alignment.rlhf import RLHFTrainer
+from src.alignment.rlhf import train_rlhf
 
 config = MewtwoConfig()
-tokenizer = MewtwoTokenizer.from_pretrained('$DATA_DIR/tokenizer')
 
 # Load DPO checkpoint
 dpo_ckpt = '$CKPT_DIR/dpo/best_model.pt'
-if os.path.exists(dpo_ckpt):
-    print(f'Loading DPO checkpoint: {dpo_ckpt}')
-else:
-    print('WARNING: No DPO checkpoint found. Using SFT/pretrain checkpoint.')
+if not os.path.exists(dpo_ckpt):
+    dpo_ckpt = '$CKPT_DIR/dpo/model.pt'
+if not os.path.exists(dpo_ckpt):
+    print('ERROR: No DPO checkpoint found. Run 06_dpo.sh first.')
+    sys.exit(1)
 
-rlhf = RLHFTrainer(
+train_rlhf(
     config=config,
-    tokenizer=tokenizer,
+    model_path=dpo_ckpt,
+    data_path='$DATA_DIR/instruction/prompts.jsonl',
+    tokenizer_path='$DATA_DIR/tokenizer/mewtwo.model',
     output_dir='$CKPT_DIR/rlhf',
-    lr=1e-5,
-    max_steps=200,
-    batch_size=2,
-    gradient_accumulation_steps=4,
-    kl_coef=0.1,
 )
-
-rlhf.train('$DATA_DIR/instruction/prompts.jsonl')
 print('RLHF alignment complete!')
 "

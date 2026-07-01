@@ -38,15 +38,7 @@ class PreferenceDataset(Dataset):
     """
     Dataset of preference pairs (chosen, rejected) responses.
 
-    Expected JSON format:
-    [
-        {
-            "prompt": "...",
-            "chosen": "...",
-            "rejected": "..."
-        },
-        ...
-    ]
+    Supports both JSON array and JSONL formats.
     """
 
     def __init__(self, data_path: str, tokenizer, max_length: int = 1024):
@@ -54,7 +46,13 @@ class PreferenceDataset(Dataset):
         self.max_length = max_length
 
         with open(data_path, "r") as f:
-            self.data = json.load(f)
+            content = f.read().strip()
+
+        # Support both JSON array and JSONL formats
+        if content.startswith("["):
+            self.data = json.loads(content)
+        else:
+            self.data = [json.loads(line) for line in content.split("\n") if line.strip()]
 
         print(f"Loaded {len(self.data)} preference pairs")
 
@@ -160,7 +158,8 @@ def train_dpo(
     tokenizer = load_tokenizer(tokenizer_path)
 
     # Load SFT model (policy)
-    checkpoint = torch.load(sft_model_path, map_location=config.device)
+    # SECURITY: weights_only=False needed for config object; only load trusted checkpoints
+    checkpoint = torch.load(sft_model_path, map_location=config.device, weights_only=False)
     sft_config = checkpoint["config"]
     policy = MewtwoLLM(sft_config)
     policy.load_state_dict(checkpoint["model_state_dict"])
