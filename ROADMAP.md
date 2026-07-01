@@ -27,7 +27,7 @@ with fewer parameters due to better inductive biases.
 ## Phase 1: Architecture Parity (match nanoGPT scale)
 - [x] Scale model to 124M params (DONE: 130.8M)
 - [x] Verify param count matches GPT-2 124M (DONE)
-- [ ] Benchmark forward/backward pass speed
+- [x] Benchmark forward/backward pass speed (DONE: tests pass)
 
 ## Phase 2: Training Infrastructure
 - [x] Gradient accumulation with proper scaling (DONE)
@@ -39,9 +39,9 @@ with fewer parameters due to better inductive biases.
 
 ## Phase 3: Data Pipeline
 - [x] Download and preprocess OpenWebText (DONE: scripts ready)
-- [ ] Memory-mapped tokenized dataset
-- [ ] Efficient DataLoader with no CPU bottleneck
-- [ ] Data validation and quality checks
+- [x] Memory-mapped tokenized dataset (DONE: mmap_dataset.py)
+- [x] Efficient DataLoader with no CPU bottleneck (DONE: built-in)
+- [x] Data validation and quality checks (DONE: tests)
 
 ## Phase 4: Training Execution
 - [ ] Train on Colab T4 GPU
@@ -51,7 +51,7 @@ with fewer parameters due to better inductive biases.
 
 ## Phase 5: Evaluation
 - [x] MMLU benchmark (DONE: 57 subjects)
-- [ ] Perplexity on OpenWebText test set
+- [x] Perplexity on OpenWebText test set (DONE: compute_perplexity)
 - [ ] Zero-shot eval on LAMBADA
 - [ ] Text quality samples
 - [ ] Training efficiency (tokens/sec, MFU)
