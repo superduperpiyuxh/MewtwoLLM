@@ -170,8 +170,19 @@ def _save_checkpoint(step, model, optimizer, config, checkpoint_dir):
     print(f"  Checkpoint saved: {ckpt_path}")
 
 
-def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoints", tokenizer_path: str = None):
-    """Main training loop with optional mixed precision."""
+def _find_latest_checkpoint(checkpoint_dir):
+    """Find the latest checkpoint file in the directory."""
+    import glob
+    ckpts = glob.glob(os.path.join(checkpoint_dir, "mewtwo_step_*.pt"))
+    if not ckpts:
+        return None
+    # Sort by step number
+    ckpts.sort(key=lambda x: int(x.split("_step_")[1].split(".")[0]))
+    return ckpts[-1]
+
+
+def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoints", tokenizer_path: str = None, resume: bool = True):
+    """Main training loop with optional mixed precision and resume support."""
 
     os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -183,7 +194,7 @@ def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoin
     model = model.to(config.device)
 
     # torch.compile() for GPU speedup (PyTorch 2.0+)
-    use_compile = config.device == "cuda" and hasattr(torch, 'compile')
+    use_compile = getattr(config, 'use_compile', True) and config.device == "cuda" and hasattr(torch, 'compile')
     if use_compile:
         model = torch.compile(model)
         print("torch.compile() enabled")
@@ -210,6 +221,20 @@ def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoin
         min_lr=config.min_lr,
     )
 
+    # Resume from checkpoint if available
+    start_step = 0
+    if resume:
+        latest_ckpt = _find_latest_checkpoint(checkpoint_dir)
+        if latest_ckpt:
+            print(f"Resuming from: {latest_ckpt}")
+            checkpoint = torch.load(latest_ckpt, map_location=config.device, weights_only=False)
+            state_dict = checkpoint["model_state_dict"]
+            cleaned = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+            model.load_state_dict(cleaned)
+            optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            start_step = checkpoint["step"]
+            print(f"Resumed at step {start_step}")
+
     dataset = TokenDataset(data_path, block_size=config.context_length, tokenizer_path=tokenizer_path)
     dataloader = DataLoader(
         dataset,
@@ -224,10 +249,11 @@ def train(config: MewtwoConfig, data_path: str, checkpoint_dir: str = "checkpoin
     model.train()
     total_loss = 0.0
     start_time = time.time()
-    step = 0
+    step = start_step
     epoch = 0
 
-    print(f"\nTraining for {config.total_steps} steps...")
+    remaining = config.total_steps - start_step
+    print(f"\nTraining {remaining} more steps (total: {config.total_steps}, starting from {start_step})...")
     print(f"Batch size: {config.batch_size} x {config.gradient_accumulation_steps} = {config.batch_size * config.gradient_accumulation_steps} effective")
     print(f"LR: {config.min_lr} -> {config.max_lr} -> {config.min_lr}")
     print(f"Device: {config.device}\n")
